@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server';
 import jwt from 'jsonwebtoken';
 
+interface DecodedToken {
+  id: string;
+  role: string;
+}
+
 export function verifyAuth(req: Request) {
   const authHeader = req.headers.get('authorization');
   const token = authHeader?.split(' ')[1];
@@ -17,7 +22,7 @@ export function verifyAuth(req: Request) {
 
   try {
     const secret = process.env.JWT_SECRET!;
-    const decoded = jwt.verify(token, secret);
+    const decoded = jwt.verify(token, secret) as DecodedToken;
     return {
       valid: true,
       decoded,

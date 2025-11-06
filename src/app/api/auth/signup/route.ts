@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
 
     // Genera un JWT al registrarse para autenticar al usuario de inmediato sin pasar por login.
     const token = jwt.sign(
-      { id: newUser.id, role: newUser.role },
+      { id: newUser.id, nickname: newUser.nickname, role: newUser.role },
       process.env.JWT_SECRET!,
       { expiresIn: '1h' }
     )
