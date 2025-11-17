@@ -28,7 +28,7 @@ model clubs {
   owner_id                                Int
   name                                    String        @db.VarChar(255)
   fiscal_address                          String        @db.Text
-  logo                                    String?       @db.VarChar(255)
+  logo                                    String?       @db.Text
   is_approved                             Boolean?      @default(false)
   approved_by_admin_id                    Int?
   approved_at                             DateTime?     @db.Timestamp(0)
