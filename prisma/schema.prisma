@@ -17,36 +17,33 @@ model categories {
 }
 
 model club_owners {
-  user_id   Int    @id
-  full_name String @db.VarChar(255)
-  dni       String @unique(map: "dni") @db.VarChar(20)
-  users     users  @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "club_owners_ibfk_1")
+  user_id                                       Int       @id
+  dni                                           String    @unique(map: "dni") @db.VarChar(20)
+  is_approved                                   Boolean?  @default(false)
+  approved_by_admin_id                          Int?
+  approved_at                                   DateTime? @db.Timestamp(0)
+  users                                         users     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "club_owners_ibfk_1")
+  users_club_owners_approved_by_admin_idTousers users?    @relation("club_owners_approved_by_admin_idTousers", fields: [approved_by_admin_id], references: [id], onUpdate: NoAction, map: "club_owners_ibfk_2")
+
+  @@index([approved_by_admin_id], map: "approved_by_admin_id")
 }
 
 model clubs {
-  id                                      Int           @id @default(autoincrement())
-  owner_id                                Int
-  name                                    String        @db.VarChar(255)
-  fiscal_address                          String        @db.Text
-  logo                                    String?       @db.Text
-  is_approved                             Boolean?      @default(false)
-  approved_by_admin_id                    Int?
-  approved_at                             DateTime?     @db.Timestamp(0)
-  created_at                              DateTime?     @default(now()) @db.Timestamp(0)
-  updated_at                              DateTime?     @default(now()) @db.Timestamp(0)
-  users_clubs_owner_idTousers             users         @relation("clubs_owner_idTousers", fields: [owner_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "clubs_ibfk_1")
-  users_clubs_approved_by_admin_idTousers users?        @relation("clubs_approved_by_admin_idTousers", fields: [approved_by_admin_id], references: [id], onUpdate: NoAction, map: "clubs_ibfk_2")
-  competitors                             competitors[]
+  id                          Int           @id @default(autoincrement())
+  owner_id                    Int
+  name                        String        @db.VarChar(255)
+  fiscal_address              String        @db.Text
+  logo                        String?       @db.Text
+  created_at                  DateTime?     @default(now()) @db.Timestamp(0)
+  updated_at                  DateTime?     @default(now()) @db.Timestamp(0)
+  users_clubs_owner_idTousers users         @relation("clubs_owner_idTousers", fields: [owner_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "clubs_ibfk_1")
+  competitors                 competitors[]
 
-  @@index([approved_by_admin_id], map: "approved_by_admin_id")
   @@index([owner_id], map: "owner_id")
 }
 
 model competitors {
   user_id                              Int                        @id
-  full_name                            String                     @db.VarChar(255)
-  nickname                             String                     @unique(map: "nickname") @db.VarChar(255)
-  profile_picture                      String?                    @db.VarChar(255)
   club_id                              Int
   is_approved                          Boolean?                   @default(false)
   approved_by                          Int?
@@ -229,23 +226,27 @@ model tournaments {
 }
 
 model users {
-  id                                         Int               @id @default(autoincrement())
-  full_name                                  String            @db.VarChar(255)
-  nickname                                   String            @unique(map: "nickname") @db.VarChar(100)
-  user_password                              String            @db.VarChar(255)
-  role                                       users_role
-  is_active                                  Boolean?          @default(false)
-  created_at                                 DateTime?         @default(now()) @db.Timestamp(0)
-  updated_at                                 DateTime?         @default(now()) @db.Timestamp(0)
-  club_owners                                club_owners?
-  clubs_clubs_owner_idTousers                clubs[]           @relation("clubs_owner_idTousers")
-  clubs_clubs_approved_by_admin_idTousers    clubs[]           @relation("clubs_approved_by_admin_idTousers")
-  competitors_competitors_user_idTousers     competitors?      @relation("competitors_user_idTousers")
-  competitors_competitors_approved_byTousers competitors[]     @relation("competitors_approved_byTousers")
-  judges                                     judges[]
-  news                                       news[]
-  password_resets                            password_resets[]
-  tournaments                                tournaments[]
+  id                                                  Int               @id @default(autoincrement())
+  name                                                String            @db.VarChar(255)
+  lastName                                            String            @db.VarChar(255)
+  age                                                 Int?              @db.UnsignedTinyInt
+  nickname                                            String            @unique(map: "nickname") @db.VarChar(100)
+  email                                               String            @unique(map: "email") @db.VarChar(320)
+  user_password                                       String            @db.VarChar(255)
+  profile_picture                                     String?           @db.Text
+  role                                                users_role
+  is_active                                           Boolean?          @default(false)
+  created_at                                          DateTime?         @default(now()) @db.Timestamp(0)
+  updated_at                                          DateTime?         @default(now()) @db.Timestamp(0)
+  club_owners                                         club_owners?
+  club_owners_club_owners_approved_by_admin_idTousers club_owners[]     @relation("club_owners_approved_by_admin_idTousers")
+  clubs_clubs_owner_idTousers                         clubs[]           @relation("clubs_owner_idTousers")
+  competitors_competitors_user_idTousers              competitors?      @relation("competitors_user_idTousers")
+  competitors_competitors_approved_byTousers          competitors[]     @relation("competitors_approved_byTousers")
+  judges                                              judges[]
+  news                                                news[]
+  password_resets                                     password_resets[]
+  tournaments                                         tournaments[]
 }
 
 enum users_role {

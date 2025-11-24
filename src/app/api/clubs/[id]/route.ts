@@ -28,6 +28,14 @@ export async function GET(
     // Bucar club
     const club = await prisma.clubs.findFirst({
       where: { id: numericId },
+      include: {
+        users_clubs_owner_idTousers: {
+          select: {
+            name: true,
+            email: true,
+          }
+        }
+      }
     })
 
     if (!club) {

@@ -33,8 +33,15 @@ export async function GET(request: NextRequest) {
       skip,
       take,
       orderBy: { created_at: 'desc' },
+      include: {
+        users_clubs_owner_idTousers: {
+          select: {
+            name: true,
+            email: true,
+          }
+        }
+      }
     })
-
 
     return NextResponse.json({
       message: 'Acceso concedido',
@@ -81,7 +88,6 @@ export async function POST(request: NextRequest) {
         name,
         fiscal_address,
         logo: logo ?? null,
-        approved_by_admin_id: null
       }
     })
 
@@ -90,8 +96,6 @@ export async function POST(request: NextRequest) {
       data: newClub
     })
   } catch (error) {
-    console.log(error)
-
     if (error instanceof ValidationError) {
       return NextResponse.json(
         { errors: error.errors },

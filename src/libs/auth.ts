@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken';
 interface DecodedToken {
   id: string;
   role: string;
+  email: string;
 }
 
 export function verifyAuth(req: Request) {

@@ -1,12 +1,12 @@
-import { verifyAuth } from '@/libs/auth';
+import { verifyAuth } from '@/libs/auth'
 import prisma from '@/libs/prisma'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function GET(request: NextRequest) {
   try {
     // Validar token de acceso
-    const auth = verifyAuth(request);
-    if (!auth.valid) return auth.response;
+    const auth = verifyAuth(request)
+    if (!auth.valid) return auth.response
 
     const { searchParams } = new URL(request.url)
 
@@ -33,11 +33,33 @@ export async function GET(request: NextRequest) {
       orderBy: { created_at: 'desc' },
       select: {
         id: true,
-        full_name: true,
+        name: true,
+        lastName: true,
+        age: true,
         nickname: true,
         role: true,
         created_at: true,
-        updated_at: true
+        updated_at: true,
+
+        // Datos cuando es dueño del club
+        club_owners: {
+          select: {
+            dni: true,
+            is_approved: true,
+            approved_by_admin_id: true,
+            approved_at: true,
+          }
+        },
+
+        // Datos cuando es competidor
+        competitors_competitors_user_idTousers: {
+          select: {
+            club_id: true,
+            is_approved: true,
+            approved_by: true,
+            approved_at: true,
+          }
+        }
       }
     })
 
