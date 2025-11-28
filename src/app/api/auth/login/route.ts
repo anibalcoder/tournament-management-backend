@@ -1,30 +1,50 @@
 import prisma from '@/libs/prisma';
-import { NextResponse, NextRequest } from 'next/server'
-import bcrypt from 'bcrypt'
-import jwt from 'jsonwebtoken'
+import { NextResponse, NextRequest } from 'next/server';
+import bcrypt from 'bcrypt';
+import jwt from 'jsonwebtoken';
+import { users } from '@prisma/client';
+
+interface LoginRequest {
+  email: users['email'];
+  user_password: users['user_password'];
+}
 
 export async function POST(request: NextRequest) {
   try {
-    
-    const { nickname, user_password: password } = await request.json()
+    const { email, user_password: password } =
+      (await request.json()) as LoginRequest;
 
-    const user = await prisma.users.findUnique({ where: { nickname } })
+    const user = await prisma.users.findUnique({ where: { email } });
 
     if (!user) {
-      return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 })
+      return NextResponse.json(
+        { error: 'Usuario no encontrado' },
+        { status: 404 }
+      );
     }
 
-    const validatePassword = await bcrypt.compare(password, user?.user_password as string)
+    const validatePassword = await bcrypt.compare(
+      password,
+      user?.user_password as string
+    );
 
     if (!validatePassword) {
-      return NextResponse.json({ error: 'Contraseña incorrecta' }, { status: 401 })
+      return NextResponse.json(
+        { error: 'Contraseña incorrecta' },
+        { status: 401 }
+      );
     }
 
     const token = jwt.sign(
-      { id: user.id, nickname: user.nickname, role: user.role, email: user.email },
+      {
+        id: user.id,
+        nickname: user.nickname,
+        role: user.role,
+        email: user.email,
+      },
       process.env.JWT_SECRET!,
       { expiresIn: Number(process.env.JWT_EXPIRES_IN) || 3600 }
-    )
+    );
 
     return NextResponse.json({
       message: 'Login exitoso',
@@ -35,13 +55,13 @@ export async function POST(request: NextRequest) {
         lastName: user?.lastName,
         nickname: user?.nickname,
         email: user?.email,
-        role: user?.role
-      }
-    })
+        role: user?.role,
+      },
+    });
   } catch {
     return NextResponse.json(
       { error: 'Error interno del servidor' },
       { status: 500 }
-    )
+    );
   }
 }

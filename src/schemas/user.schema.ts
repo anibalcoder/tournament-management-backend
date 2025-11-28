@@ -67,6 +67,24 @@ export const userRegisterSchema = object ({
     }),
 })
 
+export const passwordResetSchema = object({
+  newPassword: string()
+    .required('La contraseña es obligatoria.')
+    .min(8, 'Debe tener al menos 8 caracteres.')
+    .matches(/[A-Z]/, 'Debe incluir al menos una letra mayúscula.')
+    .matches(/[a-z]/, 'Debe incluir al menos una letra minúscula.')
+    .matches(
+      /[&%#?♦♣৭Ǟ!@$^*()_+\-=[\]{};':"\\|,.<>/?]/,
+      'Debe incluir al menos un carácter especial.'
+    )
+    .test(
+      'no-dni',
+      'La contraseña no puede ser un DNI (8 dígitos numéricos).',
+      (value) => !/^\d{8}$/.test(value)
+    ),
+});
+
+// TODO: Impedir que se pueda actualizar contraseña
 export const userUpdateSchema = userRegisterSchema.partial();
 
 // Schema para actualización por club_owner
