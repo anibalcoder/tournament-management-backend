@@ -4,24 +4,27 @@ import { verifyAuth } from '@/libs/auth';
 import { clubs } from '@prisma/client';
 import { ValidationError } from 'yup';
 import { clubUpdateSchema } from '@/schemas/club.schema';
+import { applyCorsHeaders, handleCorsOptions } from '@/libs/cors';
+
+export async function OPTIONS() {
+  return handleCorsOptions();
+}
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    // Validar token de acceso
-    const auth = verifyAuth(request);
-    if (!auth.valid) return auth.response;
-
     const { id } = await params
 
     const numericId = Number(id)
 
     if (isNaN(numericId)) {
-      return NextResponse.json(
-        { error: 'ID debe ser un número válido.' },
-        { status: 400 },
+      return applyCorsHeaders(
+        NextResponse.json(
+          { error: 'ID debe ser un número válido.' },
+          { status: 400 },
+        )
       )
     }
 
@@ -29,9 +32,19 @@ export async function GET(
     const club = await prisma.clubs.findFirst({
       where: { id: numericId },
       include: {
-        users_clubs_owner_idTousers: {
+        owner: {
           select: {
+            id: true,
             name: true,
+            nickname: true,
+            email: true,
+          }
+        },
+        approvedByAdmin: {
+          select: {
+            id: true,
+            name: true,
+            nickname: true,
             email: true,
           }
         }
@@ -39,17 +52,21 @@ export async function GET(
     })
 
     if (!club) {
-      return NextResponse.json(
-        { error: `El ID ${ numericId } no existe` },
-        { status: 404 },
+      return applyCorsHeaders(
+        NextResponse.json(
+          { error: `El club con ID ${ numericId } no existe` },
+          { status: 404 },
+        )
       )
     }
 
-    return NextResponse.json(club)
+    return applyCorsHeaders(NextResponse.json(club))
   } catch {
-    return NextResponse.json(
-      { error: 'Error interno del servidor. Inténtalo más tarde.' },
-      { status: 500 },
+    return applyCorsHeaders(
+      NextResponse.json(
+        { error: 'Error interno del servidor. Inténtalo más tarde.' },
+        { status: 500 },
+      )
     )
   }
 }
@@ -67,19 +84,23 @@ export async function DELETE(
     // Verificar rol
     const userRole = auth.decoded?.role;
     if (userRole !== 'admin') {
-      return NextResponse.json(
-        { error: 'Solo los administradores pueden eliminar clubes.' },
-        { status: 403 },
-      );
+      return applyCorsHeaders(
+        NextResponse.json(
+          { error: 'Solo los administradores pueden eliminar clubes.' },
+          { status: 403 },
+        )
+      )
     }
 
     const { id } = await params
     const numericId = Number(id)
 
     if (isNaN(numericId)) {
-      return NextResponse.json(
-        { error: 'ID debe ser un número válido.' },
-        { status: 400 },
+      return applyCorsHeaders(
+        NextResponse.json(
+          { error: 'ID debe ser un número válido.' },
+          { status: 400 },
+        )
       )
     }
 
@@ -87,10 +108,12 @@ export async function DELETE(
     const existingClub = await prisma.clubs.findUnique({ where: { id: numericId } })
 
     if (!existingClub) {
-      return NextResponse.json(
-        { error: `El club con ID ${ numericId } no existe.` },
-        { status: 400 },
-      );
+      return applyCorsHeaders(
+        NextResponse.json(
+          { error: `El club con ID ${ numericId } no existe.` },
+          { status: 400 },
+        )
+      )
     }
 
     // Eliminar club
@@ -98,13 +121,15 @@ export async function DELETE(
       where: { id: numericId },
     })
 
-    return NextResponse.json({
+    return applyCorsHeaders(NextResponse.json({
       message: `El club con ID ${ numericId } eliminado correctamente.`,
-    })
+    }))
   } catch {
-    return NextResponse.json(
-      { error: 'Error interno del servidor al eliminar el club.' },
-      { status: 500 },
+    return applyCorsHeaders(
+      NextResponse.json(
+        { error: 'Error interno del servidor al eliminar el club.' },
+        { status: 500 },
+      )
     )
   }
 }
@@ -121,47 +146,64 @@ export async function PATCH(
 
     // Verificar rol
     const userRole = auth.decoded?.role;
+    const userId = auth.decoded?.id;
+  
     if (userRole !== 'admin') {
-      return NextResponse.json(
-        { error: 'Solo los administradores pueden actualizar clubes.' },
-        { status: 403 },
-      );
+      return applyCorsHeaders(
+        NextResponse.json(
+          { error: 'Solo los administradores pueden actualizar clubes.' },
+          { status: 403 },
+        )
+      )
     }
 
     const { id } = await params
     const numericId = Number(id)
 
     if (isNaN(numericId)) {
-      return NextResponse.json(
-        { error: 'ID debe ser un número válido.' },
-        { status: 400 },
+      return applyCorsHeaders(
+        NextResponse.json(
+          { error: 'ID debe ser un número válido.' },
+          { status: 400 },
+        )
       )
     }
 
     // Verificar si el club ya existe
-    const existingClub = await prisma.clubs.findUnique({ where: { id: numericId } })
+    const existingClub = await prisma.clubs.findUnique({
+      where: { id: numericId },
+    })
 
     if (!existingClub) {
-      return NextResponse.json(
-        { error: `El club con ID ${ numericId } no existe.` },
-        { status: 400 },
-      );
+      return applyCorsHeaders(
+        NextResponse.json(
+          { error: `El club con ID ${ numericId } no existe.` },
+          { status: 400 },
+        )
+      )
     }
 
     // Validar los datos de entrada
     const {
       name,
       fiscal_address,
-      logo
+      logo,
+      is_approved
     } = await clubUpdateSchema.validate((await request.json()))
 
     // Preparar datos para actualizar
-    const dataToUpdate: Partial<Pick<clubs, 'name' | 'fiscal_address' | 'logo'>> = {}
+    const dataToUpdate: Partial<clubs> = {}
 
     // Agregar campos si se proporcionan
     if (name) dataToUpdate.name = name;
     if (fiscal_address) dataToUpdate.fiscal_address = fiscal_address;
     if (logo) dataToUpdate.logo = logo
+
+    if (typeof is_approved === 'boolean') {
+      dataToUpdate.is_approved = is_approved;
+      dataToUpdate.approved_by = Number(userId);
+      dataToUpdate.approvedAt = new Date()
+    }
 
     // Actualizar club
     const clubUpdate = await prisma.clubs.update({
@@ -169,21 +211,27 @@ export async function PATCH(
       data: dataToUpdate,
     });
 
-    return NextResponse.json({
-      message: `El club con ID ${ numericId } actualizado correctamente.`,
-      data: clubUpdate
-    });
+    return applyCorsHeaders(
+      NextResponse.json({
+        message: `El club con ID ${ numericId } actualizado correctamente.`,
+        data: clubUpdate
+      })
+    )
   } catch (error) {
     if (error instanceof ValidationError) {
-      return NextResponse.json(
-        { errors: error.errors },
-        { status: 400 }
+      return applyCorsHeaders(
+        NextResponse.json(
+          { errors: error.errors },
+          { status: 400 }
+        )
       )
     }
 
-    return NextResponse.json(
-      { error: 'Error interno del servidor al actualizar el club.' },
-      { status: 500 },
-    );
+    return applyCorsHeaders (
+      NextResponse.json(
+        { error: 'Error interno del servidor al actualizar el club.' },
+        { status: 500 },
+      )
+    )
   }
 }
