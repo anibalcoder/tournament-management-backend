@@ -54,7 +54,6 @@ export async function GET(request: NextRequest) {
         nickname: true,
         email: true,
         role: true,
-        is_active: true,
         created_at: true,
         updated_at: true,
         // Datos cuando es dueño del club
@@ -62,8 +61,12 @@ export async function GET(request: NextRequest) {
           select: {
             dni: true,
             is_approved: true,
-            approved_by_admin_id: true,
-            approved_at: true,
+            approvedByAdmin: {
+              select: {
+                id: true,
+                nickname: true,
+              }
+            }
           }
         },
         // Datos cuando es competidor
@@ -72,7 +75,11 @@ export async function GET(request: NextRequest) {
             club_id: true,
             is_approved: true,
             approved_by: true,
-            approved_at: true,
+            approvedBy: {
+              select: {
+                nickname: true,
+              }
+            }
           }
         }
       }
@@ -81,8 +88,8 @@ export async function GET(request: NextRequest) {
     return applyCorsHeaders(
       NextResponse.json({
         message: 'Acceso concedido',
-        userAuth: auth.decoded,
-        data: users
+        data: users,
+        total: users.length
       })
     )
   } catch {
@@ -107,7 +114,7 @@ export async function POST(request: NextRequest) {
     if (userRole !== 'admin') {
       return applyCorsHeaders(
         NextResponse.json(
-          { error: 'Solo los administradores pueden eliminar noticias.' },
+          { error: 'Solo los administradores pueden crear un usuario.' },
           { status: 403 }
         )
       );
@@ -208,7 +215,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     if (error instanceof ValidationError) {
       return applyCorsHeaders(
-        NextResponse.json({ errors: error.errors }, { status: 400 })
+        NextResponse.json({ error: error.message }, { status: 400 })
       )
     }
 

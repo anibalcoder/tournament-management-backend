@@ -84,27 +84,64 @@ export const passwordResetSchema = object({
     ),
 });
 
-// TODO: Impedir que se pueda actualizar contraseña
-export const userUpdateSchema = userRegisterSchema.partial();
-
-// Schema para actualización por club_owner
-// Solo permite actualizar is_approved y approved_by_admin_id
-export const clubOwnerUpdateSchema = object({
-  is_approved: boolean()
+export const userUpdateSchema = object({
+  name: string()
+    .min(2, 'El nombre debe tener al menos 2 caracteres.')
+    .max(255, 'El nombre no puede superar los 255 caracteres.')
     .optional(),
-  approved_by_admin_id: number()
-    .optional()
-    .positive('El approved_by_admin_id debe ser un número positivo.')
-    .integer('El approved_by_admin_id debe ser un número entero.'),
-});
 
-// Schema para actualización por competitor
-// Solo permite actualizar is_approved y approved_by
-export const competitorUpdateSchema = object({
-  is_approved: boolean()
+  lastName: string()
+    .min(2, 'El apellido debe tener al menos 2 caracteres.')
+    .max(255, 'El apellido no puede superar los 255 caracteres.')
     .optional(),
-  approved_by: number()
-    .optional()
-    .positive('El approved_by debe ser un número positivo.')
-    .integer('El approved_by debe ser un número entero.'),
+
+  nickname: string()
+    .min(3, 'El nickname debe tener al menos 3 caracteres.')
+    .max(30, 'El nickname no puede superar los 30 caracteres.')
+    .optional(),
+
+  age: number()
+    .min(18, 'Debes ser mayor o igual a 18 años.')
+    .integer('La edad debe ser un número entero.')
+    .optional(),
+
+  email: string()
+    .email('Debe ingresar un email válido.')
+    .max(320, 'El email no puede superar los 320 caracteres.')
+    .optional(),
+
+  user_password: string()
+    .min(8, 'Debe tener al menos 8 caracteres.')
+    .matches(/[A-Z]/, 'Debe incluir al menos una letra mayúscula.')
+    .matches(/[a-z]/, 'Debe incluir al menos una letra minúscula.')
+    .matches(/[&%#?♦♣৭Ǟ!@$^*()_+\-=[\]{};':"\\|,.<>/?]/, 'Debe incluir al menos un carácter especial.')
+    .test(
+      'no-dni',
+      'La contraseña no puede ser un DNI (8 dígitos numéricos).',
+      (value) => !value || !/^\d{8}$/.test(value)
+    )
+    .optional(),
+
+  profile_picture: string()
+    .url('Debe ser una URL válida.')
+    .optional(),
+
+  // Sub-schema para club_owner
+  club_owner: object({
+    dni: string()
+      .min(8, 'El DNI debe tener al menos 8 caracteres.')
+      .max(20, 'El DNI no puede superar los 20 caracteres.')
+      .matches(/^[0-9]+$/, 'El DNI debe contener solo números.')
+      .optional(),
+    is_approved: boolean().optional(),
+  }).optional(),
+
+  // Sub-schema para competitor
+  competitor: object({
+    club_id: number()
+      .positive('El club_id debe ser un número positivo.')
+      .integer('El club_id debe ser un número entero.')
+      .optional(),
+    is_approved: boolean().optional(),
+  }).optional(),
 });

@@ -299,7 +299,7 @@ model user_blocks {
 
   user         users     @relation("UserBlocked", fields: [user_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
 
-  blockedBy    users     @relation("UserBlockedByAdmin", fields: [blocked_by], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  blockedBy    users     @relation("UserBlockedByAdmin", fields: [blocked_by], references: [id], onDelete: Cascade, onUpdate: Cascade)
 
   @@index([user_id])
   @@index([blocked_by])
