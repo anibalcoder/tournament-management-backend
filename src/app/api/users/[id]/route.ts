@@ -1,91 +1,62 @@
-import { type NextRequest, NextResponse } from 'next/server'
-import prisma from '@/libs/prisma'
+import { type NextRequest, NextResponse } from 'next/server';
+import prisma from '@/libs/prisma';
 import { verifyAuth } from '@/libs/auth';
 import { applyCorsHeaders, handleCorsOptions } from '@/libs/cors';
-import { hash } from 'bcrypt';
 import { userUpdateSchema } from '@/schemas/user.schema';
 import { ValidationError } from 'yup';
+import { createJsonErrorResponse } from '@/helpers/createJsonErrorResponse';
+import { getUser } from '@/service/users';
+import {
+  validateBaseFieldsPermissions,
+  validateClubOwnerPermissions,
+  validateCompetitorPermissions,
+  validateJudgePermissions,
+} from '@/service/users/user.validator';
+import { updateUser } from '@/service/users';
 
 export async function OPTIONS() {
   return handleCorsOptions();
 }
 
+// Obtener usuario (debe iniciar sesión)
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // Validar token de acceso
     const auth = verifyAuth(request);
     if (!auth.valid) return auth.response;
 
-    const { id } = await params
+    const { id } = await params;
 
-    const numericId = Number(id)
+    const numericId = Number(id);
 
     if (isNaN(numericId)) {
-      return applyCorsHeaders(
-        NextResponse.json(
-          { error: 'ID debe ser un número válido.' },
-          { status: 400 },
-        )
-      )
+      return createJsonErrorResponse({
+        message: 'ID debe ser un número válido.',
+        status: 400,
+      });
     }
 
-    // Bucar usuario
-    const user = await prisma.users.findFirst({
-      where: { id: numericId },
-      select: {
-        id: true,
-        name: true,
-        lastName: true,
-        age: true,
-        nickname: true,
-        role: true,
-        created_at: true,
-        updated_at: true,
-        // Datos cuando es dueño del club
-        club_owner: {
-          select: {
-            dni: true,
-            is_approved: true,
-            approved_by_admin_id: true,
-            approved_at: true,
-          }
-        },
-        // Datos cuando es competidor
-        competitor: {
-          select: {
-            club_id: true,
-            is_approved: true,
-            approved_by: true,
-            approved_at: true,
-          }
-        }
-      }
-    })
+    // Buscar usuario
+    const user = await getUser({ numericId });
 
     if (!user) {
-      return applyCorsHeaders(
-        NextResponse.json(
-          { error: `El usuario con ID ${ numericId } no existe` },
-          { status: 404 },
-        )
-      )
+      return createJsonErrorResponse({
+        message: `El usuario con ID ${numericId} no existe`,
+        status: 404,
+      });
     }
 
-    return applyCorsHeaders(NextResponse.json(user))
+    return applyCorsHeaders(NextResponse.json(user));
   } catch {
-    return applyCorsHeaders(
-      NextResponse.json(
-        { error: 'Error interno del servidor. Inténtalo más tarde.' },
-        { status: 500 },
-      )
-    )
+    // Error genérico
+    return createJsonErrorResponse({});
   }
 }
 
-// Eliminar usuario (solo admin)
+// Eliminar usuario (admin)
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -97,37 +68,34 @@ export async function DELETE(
 
     // Verificar rol
     const userRole = auth.decoded?.role;
+
     if (userRole !== 'admin') {
-      return applyCorsHeaders(
-        NextResponse.json(
-          { error: 'Solo los administradores pueden eliminar usuarios.' },
-          { status: 403 },
-        )
-      )
+      return createJsonErrorResponse({
+        message: 'Solo los administradores pueden eliminar usuarios.',
+        status: 403,
+      });
     }
 
-    const { id } = await params
-    const numericId = Number(id)
+    const { id } = await params;
+    const numericId = Number(id);
 
     if (isNaN(numericId)) {
-      return applyCorsHeaders (
-        NextResponse.json(
-          { error: 'ID debe ser un número válido.' },
-          { status: 400 },
-        )
-      )
+      return createJsonErrorResponse({
+        message: 'ID debe ser un número válido.',
+        status: 400,
+      });
     }
 
     // Verificar si el usuario ya existe
-    const existingUser = await prisma.users.findUnique({ where: { id: numericId } })
+    const existingUser = await prisma.users.findUnique({
+      where: { id: numericId },
+    });
 
     if (!existingUser) {
-      return applyCorsHeaders(
-        NextResponse.json(
-          { error: `El usuario con ID ${ numericId } no existe.` },
-          { status: 400 },
-        )
-      )
+      return createJsonErrorResponse({
+        message: `El usuario con ID ${numericId} no existe.`,
+        status: 400,
+      });
     }
 
     // Eliminar el usuario
@@ -137,129 +105,103 @@ export async function DELETE(
 
     return applyCorsHeaders(
       NextResponse.json({
-        message: `El usuario con ID ${ numericId } eliminado correctamente.`,
+        message: `El usuario con ID ${numericId} eliminado correctamente.`,
       })
     );
   } catch {
-    return applyCorsHeaders(
-      NextResponse.json(
-        { error: 'Error interno del servidor al eliminar el usuario.' },
-        { status: 500 },
-      )
-    )
+    // Error génerico
+    return createJsonErrorResponse({});
   }
 }
 
+// Actualizar usuario (dueño del perfíl y admin)
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  // Helper para respuestas con CORS
-  const jsonResponse = (data: object, status = 200) =>
-    applyCorsHeaders(NextResponse.json(data, { status }));
-
   try {
+    // autenticación
     const auth = verifyAuth(request);
-    if (!auth.valid) return auth.response;
+    if (!auth.valid || !auth.decoded) return auth.response;
 
+    const authenticatedUser = auth.decoded;
+
+    // validación de parámetros
     const { id } = await params;
     const numericId = Number(id);
 
     if (isNaN(numericId)) {
-      return jsonResponse({ error: 'El ID del usuario debe ser un número válido.' }, 400);
+      return createJsonErrorResponse({
+        message: 'El ID del usuario debe ser un número válido.',
+        status: 400,
+      });
     }
 
+    // usuario a editar
     const userToEdit = await prisma.users.findUnique({
       where: { id: numericId },
-      include: { club_owner: true, competitor: { include: { club: true } } }
+      include: {
+        club_owner: true,
+        competitor: { include: { club: true } },
+        judges: { include: { categories: true } },
+      },
     });
 
     if (!userToEdit) {
-      return jsonResponse({ error: 'Usuario a editar no existe' }, 404);
+      return createJsonErrorResponse({
+        message: 'Usuario a editar no existe.',
+        status: 404,
+      });
     }
 
-    const authenticatedUser = auth.decoded!;
-    const isAdmin = authenticatedUser.role === 'admin';
-    const isOwner = Number(authenticatedUser.id) === userToEdit.id;
+    // body + esquema
     const body = await request.json();
-
-    // Validación de lo que el usuario añade
     await userUpdateSchema.validate(body, { abortEarly: false });
 
-    // Prohibir cambio de rol
-    if (body.role !== undefined) {
-      return jsonResponse({ error: 'No se puede editar el rol del usuario.' }, 400);
+    // validadores
+    const validators = [
+      validateBaseFieldsPermissions(body, userToEdit, authenticatedUser),
+      validateCompetitorPermissions(body, userToEdit, authenticatedUser),
+      validateClubOwnerPermissions(body, userToEdit, authenticatedUser),
+      await validateJudgePermissions(
+        body,
+        userToEdit,
+        authenticatedUser,
+        prisma
+      ),
+    ];
+
+    const validationError = validators.find((v) => v?.error);
+    if (validationError) {
+      return createJsonErrorResponse({
+        message: validationError.error,
+        status: validationError.status,
+      });
     }
 
-    // Validar permisos para competitor
-    if (body.competitor) {
-      if (!userToEdit.competitor) {
-        return jsonResponse({ error: 'El usuario a editar no es competidor.' }, 400);
-      }
-      const isClubOwner = Number(authenticatedUser.id) === userToEdit.competitor.club.owner_id;
-      if (!isAdmin && !isClubOwner) {
-        return jsonResponse({ error: 'Solo administrador o dueño del club pueden editar competitor.' }, 403);
-      }
-    }
-
-    // Validar permisos para campos base
-    const BASE_FIELDS = ['name', 'lastName', 'age', 'profile_picture', 'nickname', 'email', 'user_password'];
-    if (BASE_FIELDS.some(field => body[field] !== undefined) && !isAdmin && !isOwner) {
-      return jsonResponse({ error: 'Solo el dueño del perfil o un administrador pueden editar este usuario.' }, 403);
-    }
-
-    // Validar permisos para club_owner
-    if (body.club_owner) {
-      if (!isAdmin) return jsonResponse({ error: 'Solo administrador puede editar club_owner.' }, 403);
-      if (!userToEdit.club_owner) return jsonResponse({ error: 'Este usuario no es club_owner.' }, 400);
-    }
-
-    // Construir datos base (incluyendo hash de password si aplica)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const baseData: Record<string, any> = Object.fromEntries(
-      BASE_FIELDS.filter(f => f !== 'user_password' && body[f] !== undefined)
-        .map(f => [f, body[f]])
-    );
-    if (body.user_password) baseData.user_password = await hash(body.user_password, 10);
-
-    // Update final
-    const updatedUser = await prisma.users.update({
-      where: { id: numericId },
-      data: {
-        ...baseData,
-        updated_at: new Date(),
-        club_owner: body.club_owner ? {
-          update: {
-            dni: String(body.club_owner.dni ?? userToEdit.club_owner!.dni),
-            is_approved: Boolean(body.club_owner.is_approved ?? userToEdit.club_owner!.is_approved),
-            approved_at: new Date(),
-            approved_by_admin_id: Number(authenticatedUser.id)
-          }
-        } : undefined,
-        competitor: body.competitor ? {
-          update: {
-            club_id: Number(body.competitor.club_id ?? userToEdit.competitor!.club_id),
-            is_approved: body.competitor.is_approved ?? userToEdit.competitor!.is_approved,
-            approved_at: new Date(),
-            approved_by: body.competitor.is_approved === true ? Number(authenticatedUser.id) : userToEdit.competitor!.approved_by!
-          }
-        } : undefined
-      },
-      select: {
-        id: true, name: true, lastName: true, age: true, profile_picture: true,
-        nickname: true, email: true, role: true, created_at: true, updated_at: true,
-        club_owner: true, competitor: true
-      }
+    // servicio (actualiza la BD)
+    const updatedUser = await updateUser({
+      userId: numericId,
+      body,
+      authenticatedUserId: Number(authenticatedUser.id),
+      isAdmin: authenticatedUser.role === 'admin',
+      prisma,
     });
 
-    return jsonResponse({ message: 'Usuario actualizado correctamente.', data: updatedUser });
-
+    return applyCorsHeaders(
+      NextResponse.json({
+        message: 'Usuario actualizado correctamente.',
+        data: updatedUser,
+      })
+    );
   } catch (error) {
     if (error instanceof ValidationError) {
-      return jsonResponse({ error: error.errors }, 500);
+      return createJsonErrorResponse({
+        message: error.errors.join(', '),
+        status: 500,
+      });
     }
 
-    console.error(error);
-    return jsonResponse({ error: 'Error interno del servidor.' }, 500);
+    return createJsonErrorResponse({});
   }
 }

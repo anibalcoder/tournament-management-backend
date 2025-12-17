@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import jwt from 'jsonwebtoken';
 import { applyCorsHeaders, handleCorsOptions } from '@/libs/cors';
 
-interface DecodedToken {
+export interface DecodedToken {
   id: string;
   role: string;
   email: string;

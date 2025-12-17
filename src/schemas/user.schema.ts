@@ -1,21 +1,21 @@
-import { object, string, number, boolean } from 'yup'
+import { object, string, number, boolean, array } from 'yup';
 import { users_role } from '@prisma/client';
 
-export const userRegisterSchema = object ({
-  name: string ()
+export const userRegisterSchema = object({
+  name: string()
     .required('El nombre es obligatorio.')
     .min(2, 'El nombre debe tener al menos 2 caracteres.')
     .max(255, 'El nombre no puede superar los 255 caracteres.'),
 
-  lastName: string ()
+  lastName: string()
     .required('El apellido es obligatorio.')
     .min(2, 'El apellido debe tener al menos 2 caracteres.')
     .max(255, 'El apellido no puede superar los 255 caracteres.'),
 
-  nickname: string ()
-    .required ('El nickname es obligatorio.')
-    .min (3, 'El nickname debe tener al menos 3 caracteres.')
-    .max (30, 'El nickname no puede superar los 30 caracteres.'),
+  nickname: string()
+    .required('El nickname es obligatorio.')
+    .min(3, 'El nickname debe tener al menos 3 caracteres.')
+    .max(30, 'El nickname no puede superar los 30 caracteres.'),
 
   age: number()
     .required('La edad es obligatorio.')
@@ -27,45 +27,64 @@ export const userRegisterSchema = object ({
     .email('Debe ingresar un email válido.')
     .max(320, 'El email no puede superar los 320 caracteres.'),
 
-  user_password: string ()
-    .required ('La contraseña es obligatoria.')
-    .min (8, 'Debe tener al menos 8 caracteres.')
-    .matches (/[A-Z]/, 'Debe incluir al menos una letra mayúscula.')
-    .matches (/[a-z]/, 'Debe incluir al menos una letra minúscula.')
-    .matches (/[&%#?♦♣৭Ǟ!@$^*()_+\-=[\]{};':"\\|,.<>/?]/, 'Debe incluir al menos un carácter especial.')
-    .test (
+  user_password: string()
+    .required('La contraseña es obligatoria.')
+    .min(8, 'Debe tener al menos 8 caracteres.')
+    .matches(/[A-Z]/, 'Debe incluir al menos una letra mayúscula.')
+    .matches(/[a-z]/, 'Debe incluir al menos una letra minúscula.')
+    .matches(
+      /[&%#?♦♣৭Ǟ!@$^*()_+\-=[\]{};':'\\|,.<>/?]/,
+      'Debe incluir al menos un carácter especial.'
+    )
+    .test(
       'no-dni',
       'La contraseña no puede ser un DNI (8 dígitos numéricos).',
-      (value) => !/^\d{8}$/.test (value)
+      (value) => !/^\d{8}$/.test(value)
     ),
 
-  role: string ()
+  role: string()
     .required('El rol es obligatorio.')
-    .oneOf (Object.values(users_role), 'Rol no válido.'),
+    .oneOf(Object.values(users_role), 'Rol no válido.'),
 
   // Campo obligatorio solo para dueños de club
-  dni: string ()
-    .when('role', {
-      is: users_role.club_owner,
-      then: (schema) => schema
+  dni: string().when('role', {
+    is: users_role.club_owner,
+    then: (schema) =>
+      schema
         .required('El DNI es obligatorio para dueños de club.')
         .min(8, 'El DNI debe tener al menos 8 caracteres.')
         .max(20, 'El DNI no puede superar los 20 caracteres.')
         .matches(/^[0-9]+$/, 'El DNI debe contener solo números.'),
-      otherwise: (schema) => schema.notRequired()
-    }),
+    otherwise: (schema) => schema.notRequired(),
+  }),
 
   // Campo obligatorio solo para competidores
-  club_id: number ()
-    .when('role', {
-      is: users_role.competitor,
-      then: (schema) => schema
+  club_id: number().when('role', {
+    is: users_role.competitor,
+    then: (schema) =>
+      schema
         .required('El club_id es obligatorio para competidores.')
         .positive('El club_id debe ser un número positivo.')
         .integer('El club_id debe ser un número entero.'),
-      otherwise: (schema) => schema.notRequired()
+    otherwise: (schema) => schema.notRequired(),
+  }),
+
+  // Campo obligatorio solo para jueces
+  category_ids: array()
+    .of(
+      number()
+        .positive('Cada ID de categoría debe ser un número positivo.')
+        .integer('Cada ID de categoría debe ser un número entero.')
+    )
+    .when('role', {
+      is: users_role.judge,
+      then: (schema) =>
+        schema
+          .required('El campo category_ids es obligatorias para jueces.')
+          .min(1, 'Debe asignar al menos una categoría.'),
+      otherwise: (schema) => schema.notRequired(),
     }),
-})
+});
 
 export const passwordResetSchema = object({
   newPassword: string()
@@ -74,7 +93,7 @@ export const passwordResetSchema = object({
     .matches(/[A-Z]/, 'Debe incluir al menos una letra mayúscula.')
     .matches(/[a-z]/, 'Debe incluir al menos una letra minúscula.')
     .matches(
-      /[&%#?♦♣৭Ǟ!@$^*()_+\-=[\]{};':"\\|,.<>/?]/,
+      /[&%#?♦♣৭Ǟ!@$^*()_+\-=[\]{};':'\\|,.<>/?]/,
       'Debe incluir al menos un carácter especial.'
     )
     .test(
@@ -114,7 +133,10 @@ export const userUpdateSchema = object({
     .min(8, 'Debe tener al menos 8 caracteres.')
     .matches(/[A-Z]/, 'Debe incluir al menos una letra mayúscula.')
     .matches(/[a-z]/, 'Debe incluir al menos una letra minúscula.')
-    .matches(/[&%#?♦♣৭Ǟ!@$^*()_+\-=[\]{};':"\\|,.<>/?]/, 'Debe incluir al menos un carácter especial.')
+    .matches(
+      /[&%#?♦♣৭Ǟ!@$^*()_+\-=[\]{};':'\\|,.<>/?]/,
+      'Debe incluir al menos un carácter especial.'
+    )
     .test(
       'no-dni',
       'La contraseña no puede ser un DNI (8 dígitos numéricos).',
@@ -122,9 +144,7 @@ export const userUpdateSchema = object({
     )
     .optional(),
 
-  profile_picture: string()
-    .url('Debe ser una URL válida.')
-    .optional(),
+  profile_picture: string().url('Debe ser una URL válida.').optional(),
 
   // Sub-schema para club_owner
   club_owner: object({
@@ -141,6 +161,19 @@ export const userUpdateSchema = object({
     club_id: number()
       .positive('El club_id debe ser un número positivo.')
       .integer('El club_id debe ser un número entero.')
+      .optional(),
+    is_approved: boolean().optional(),
+  }).optional(),
+
+  // Sub-schema para judge
+  judge: object({
+    category_ids: array()
+      .of(
+        number()
+          .positive('Cada ID de categoría debe ser un número positivo.')
+          .integer('Cada ID de categoría debe ser un número entero.')
+      )
+      .min(1, 'Debe asignar al menos una categoría.')
       .optional(),
     is_approved: boolean().optional(),
   }).optional(),

@@ -15,6 +15,7 @@ model categories {
   tournament_registrations tournament_registrations[]
   tournament_results       tournament_results[]
   news_categories          news_categories[]
+  judges                   judge_categories[]
 }
 
 model club_owners {
@@ -94,18 +95,37 @@ model judge_scores {
 }
 
 model judges {
-  id                       Int                        @id @default(autoincrement())
-  user_id                  Int
-  specialization           String?                    @db.VarChar(255)
-  is_active                Boolean?                   @default(true)
-  created_at               DateTime?                  @default(now()) @db.Timestamp(0)
+  id      Int @id @default(autoincrement())
+  user_id Int
+
+  // Aprobación
+  is_approved Boolean   @default(false)
+  approved_by Int?
+  approved_at DateTime? @db.Timestamp(0)
+
+  // Relaciones
   judge_scores             judge_scores[]
   tournament_judges        tournament_judges[]
   tournament_registrations tournament_registrations[]
+  categories               judge_categories[]
 
   user users @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  approvedByAdmin users? @relation("JudgeApprovedBy", fields: [approved_by], references: [id])
 
-  @@index([user_id])
+  @@index([approved_by])
+}
+
+model judge_categories {
+  id          Int @id @default(autoincrement())
+  judge_id    Int
+  category_id Int
+
+  judge judges @relation(fields: [judge_id], references: [id], onDelete: Cascade)
+  category categories @relation(fields: [category_id], references: [id], onDelete: Cascade)
+
+  @@unique([judge_id, category_id])
+  @@index([judge_id])
+  @@index([category_id])
 }
 
 model news {
@@ -300,6 +320,7 @@ model users {
   updated_at      DateTime?  @default(now()) @db.Timestamp(0)
 
   judges              judges[]
+  approvedJudges      judges[]          @relation("JudgeApprovedBy")
   news                news[]
   password_resets     password_resets[]
   approvedClubs       clubs[]           @relation("ClubApprovedBy")

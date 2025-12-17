@@ -1,12 +1,18 @@
-import { verifyAuth } from '@/libs/auth'
-import prisma from '@/libs/prisma'
-import { NextRequest, NextResponse } from 'next/server'
+import { verifyAuth } from '@/libs/auth';
+import prisma from '@/libs/prisma';
+import { NextRequest, NextResponse } from 'next/server';
 import { applyCorsHeaders, handleCorsOptions } from '@/libs/cors';
 import { userRegisterSchema } from '@/schemas/user.schema';
 import { validateRol } from '@/libs/user/validateRol';
-import bcrypt from 'bcrypt'
-import { createUser } from '@/libs/user/createUser';
+import bcrypt from 'bcrypt';
+import { createUser } from '@/service/users';
 import { ValidationError } from 'yup';
+import { createJsonErrorResponse } from '@/helpers/createJsonErrorResponse';
+import {
+  getUsers,
+  validateEmailExists,
+  validateNicknameExists,
+} from '@/service/users';
 
 export async function OPTIONS() {
   return handleCorsOptions();
@@ -15,90 +21,40 @@ export async function OPTIONS() {
 export async function GET(request: NextRequest) {
   try {
     // Validar token de acceso
-    const auth = verifyAuth(request)
-    if (!auth.valid) return auth.response
+    const auth = verifyAuth(request);
+    if (!auth.valid) return auth.response;
 
-    const { searchParams } = new URL(request.url)
+    const { searchParams } = new URL(request.url);
 
-    const skip = Number(searchParams.get('skip'))
-    const take = Number(searchParams.get('take') ?? 10)
+    const skip = Number(searchParams.get('skip'));
+    const take = Number(searchParams.get('take') ?? 10);
 
     if (isNaN(skip) || skip < 0) {
-      return applyCorsHeaders(
-        NextResponse.json(
-          { error: 'skip debe ser un número válido mayor o igual a 0.' },
-          { status: 400 }
-        )
-      );
+      return createJsonErrorResponse({
+        message: 'skip debe ser un número válido mayor o igual a 0.',
+        status: 400,
+      });
     }
 
     if (isNaN(take) || take < 1) {
-      return applyCorsHeaders(
-        NextResponse.json(
-          { error: 'take debe ser un número válido mayor o igual a 1.' },
-          { status: 400 },
-        )
-      );
+      return createJsonErrorResponse({
+        message: 'take debe ser un número válido mayor o igual a 1.',
+        status: 400,
+      });
     }
 
-    const users = await prisma.users.findMany({
-      skip,
-      take,
-      orderBy: { created_at: 'desc' },
-      select: {
-        id: true,
-        name: true,
-        lastName: true,
-        age: true,
-        profile_picture: true,
-        nickname: true,
-        email: true,
-        role: true,
-        created_at: true,
-        updated_at: true,
-        // Datos cuando es dueño del club
-        club_owner: {
-          select: {
-            dni: true,
-            is_approved: true,
-            approvedByAdmin: {
-              select: {
-                id: true,
-                nickname: true,
-              }
-            }
-          }
-        },
-        // Datos cuando es competidor
-        competitor: {
-          select: {
-            club_id: true,
-            is_approved: true,
-            approved_by: true,
-            approvedBy: {
-              select: {
-                nickname: true,
-              }
-            }
-          }
-        }
-      }
-    })
+    const { total, users } = await getUsers({ skip, take });
 
     return applyCorsHeaders(
       NextResponse.json({
         message: 'Acceso concedido',
+        total,
         data: users,
-        total: users.length
       })
-    )
-  } catch {
-    return applyCorsHeaders(
-      NextResponse.json(
-        { error: 'Error interno del servidor. Inténtalo más tarde.' },
-        { status: 500 },
-      )
     );
+  } catch {
+    // Error genérico
+    return createJsonErrorResponse({});
   }
 }
 
@@ -111,16 +67,15 @@ export async function POST(request: NextRequest) {
 
     // Verificar rol
     const userRole = auth.decoded?.role;
+
     if (userRole !== 'admin') {
-      return applyCorsHeaders(
-        NextResponse.json(
-          { error: 'Solo los administradores pueden crear un usuario.' },
-          { status: 403 }
-        )
-      );
+      return createJsonErrorResponse({
+        message: 'Solo los administradores pueden crear un usuario.',
+        status: 403,
+      });
     }
 
-    const body = await request.json()
+    const body = await request.json();
 
     const {
       name,
@@ -132,54 +87,66 @@ export async function POST(request: NextRequest) {
       role,
       club_id,
       dni,
-    } = await userRegisterSchema.validate(body, { abortEarly: false })
+      category_ids: rawCategories,
+    } = await userRegisterSchema.validate(body, { abortEarly: false });
 
-    // Verificar si nickname ya existe
-    const existingNickname = await prisma.users.findUnique({
-      where: { nickname },
-    })
+    // validar nickname
+    const nick = await validateNicknameExists(prisma, nickname);
 
-    if (existingNickname) {
-      return applyCorsHeaders(
-        NextResponse.json(
-          { error: 'El nickname ya está en uso' },
-          { status: 409 }
-        )
-      )
+    if (nick.error) {
+      return createJsonErrorResponse({
+        message: nick.error,
+        status: nick.status!,
+      });
     }
 
-    // Verificar si email ya existe
-    const existingEmail = await prisma.users.findUnique({
-      where: { email },
-    })
+    // validar email
+    const mail = await validateEmailExists(prisma, email);
 
-    if (existingEmail) {
-      return applyCorsHeaders(
-        NextResponse.json(
-          { error: 'El email ya está en uso' },
-          { status: 409 }
-        )
-      )
+    if (mail.error) {
+      return createJsonErrorResponse({
+        message: mail.error,
+        status: mail.status!,
+      });
     }
+
+    // validar categorías
+    if (rawCategories) {
+      for (const categoryId of rawCategories) {
+        const categoryExists = await prisma.categories.findUnique({
+          where: { id: categoryId },
+        });
+
+        if (!categoryExists) {
+          return createJsonErrorResponse({
+            message: `Categoría con ID ${categoryId} no existe.`,
+            status: 400,
+          });
+        }
+      }
+    }
+
+    // Normalizar categories
+    const categories =
+      rawCategories?.filter((v): v is number => v !== undefined) ?? undefined;
 
     // Validar datos según rol
     const roleValidationResult = await validateRol({
       currentRole: role!,
       club_id,
       dni,
-    })
+      category_ids: categories,
+    });
 
     if (roleValidationResult?.error) {
-      return applyCorsHeaders(
-        NextResponse.json(
-          { error: roleValidationResult.error },
-          { status: roleValidationResult.status }
-        )
-      )
+      return createJsonErrorResponse({
+        message: roleValidationResult.error,
+        status: roleValidationResult.status,
+      });
     }
 
     // Hashear contraseña
-    const hashedPassword = await bcrypt.hash(user_password, 10)
+    const hashedPassword = await bcrypt.hash(user_password, 10);
 
     // Crear usuario
     const newUser = await createUser({
@@ -192,7 +159,8 @@ export async function POST(request: NextRequest) {
       role,
       club_id,
       dni,
-    })
+      category_ids: categories,
+    });
 
     // No generamos token, solo devolvemos info del usuario
     return applyCorsHeaders(
@@ -206,17 +174,18 @@ export async function POST(request: NextRequest) {
             age: newUser.age,
             nickname: newUser.nickname,
             email: newUser.email,
+            profile_picture: newUser.profile_picture,
             role: newUser.role,
           },
         },
         { status: 201 }
       )
-    )
+    );
   } catch (error) {
     if (error instanceof ValidationError) {
       return applyCorsHeaders(
         NextResponse.json({ error: error.message }, { status: 400 })
-      )
+      );
     }
 
     return applyCorsHeaders(
@@ -224,6 +193,6 @@ export async function POST(request: NextRequest) {
         { error: 'Error interno del servidor' },
         { status: 500 }
       )
-    )
+    );
   }
 }
