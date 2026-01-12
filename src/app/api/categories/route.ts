@@ -51,10 +51,10 @@ export async function POST(request: NextRequest) {
 
     // Solo un admin puede crear una categoría
     if (userRole !== 'admin') {
-      return NextResponse.json(
-        { error: 'Solo los administradores pueden crear una categoría.' },
-        { status: 403 }
-      );
+      return createJsonErrorResponse({
+        message: 'Solo los administradores pueden crear una categoría.',
+        status: 403,
+      });
     }
 
     // Validar los datos de entrada
@@ -67,10 +67,10 @@ export async function POST(request: NextRequest) {
     const existingCategory = await prisma.categories.findUnique({ where: { name } })
 
     if (existingCategory) {
-      return NextResponse.json(
-        { error: 'El nombre de la categoría ya está en uso' },
-        { status: 409 }
-      )
+      return createJsonErrorResponse({
+        message: 'El nombre de la categoría ya está en uso.',
+        status: 409,
+      });
     }
 
     // Crear categoría
@@ -81,21 +81,20 @@ export async function POST(request: NextRequest) {
       }
     })
 
-    return NextResponse.json({
-      message: 'Categoría creada correctamente.',
-      data: newCategory
-    })
+    return applyCorsHeaders(
+      NextResponse.json({
+        message: 'Categoría creada correctamente.',
+        data: newCategory
+      })
+    );
   } catch (error) {
     if (error instanceof ValidationError) {
-      return NextResponse.json(
-        { errors: error.errors },
-        { status: 400 }
-      )
+      return createJsonErrorResponse({
+        message: error.errors.join(', '),
+        status: 400,
+      });
     }
 
-    return NextResponse.json(
-      { error: 'Error interno del servidor al crear la categoría.' },
-      { status: 500 },
-    );
+    return createJsonErrorResponse({});
   }
 }

@@ -57,30 +57,30 @@ export async function DELETE(
     // Verificar rol
     const userRole = auth.decoded?.role;
     if (userRole !== 'admin') {
-      return NextResponse.json(
-        { error: 'Solo los administradores pueden eliminar una categoría.' },
-        { status: 403 },
-      );
+      return createJsonErrorResponse({
+        message: 'Solo los administradores pueden eliminar una categoría.',
+        status: 403,
+      });
     }
 
     const { id } = await params
     const numericId = Number(id)
 
     if (isNaN(numericId)) {
-      return NextResponse.json(
-        { error: `La categoría con ID ${id} debe ser un número válido.` },
-        { status: 400 },
-      )
+      return createJsonErrorResponse({
+        message: `La categoría con ID ${id} debe ser un número válido.`,
+        status: 400,
+      });
     }
 
     // Verificar si la categoría ya existe
     const existingCategory = await prisma.categories.findUnique({ where: { id: numericId } })
 
     if (!existingCategory) {
-      return NextResponse.json(
-        { error: `La categoría con ID ${ numericId } no existe.` },
-        { status: 400 },
-      );
+      return createJsonErrorResponse({
+        message: `La categoría con ID ${ numericId } no existe.`,
+        status: 400,
+      });
     }
 
     // Eliminar una categoría
@@ -88,14 +88,13 @@ export async function DELETE(
       where: { id: numericId },
     })
 
-    return NextResponse.json({
-      message: `La categoría con ID ${ numericId } eliminada correctamente.`,
-    })
+    return applyCorsHeaders(
+      NextResponse.json({
+        message: `La categoría con ID ${numericId} eliminada correctamente.`,
+      })
+    );
   } catch {
-    return NextResponse.json(
-      { error: 'Error interno del servidor al eliminar la categoría.' },
-      { status: 500 },
-    )
+    return createJsonErrorResponse({});
   }
 }
 
@@ -112,30 +111,30 @@ export async function PATCH(
     // Verificar rol
     const userRole = auth.decoded?.role;
     if (userRole !== 'admin') {
-      return NextResponse.json(
-        { error: 'Solo los administradores pueden actualizar categorías.' },
-        { status: 403 },
-      );
+      return createJsonErrorResponse({
+        message: 'Solo los administradores pueden actualizar categorías.',
+        status: 403,
+      });
     }
 
     const { id } = await params
     const numericId = Number(id)
 
     if (isNaN(numericId)) {
-      return NextResponse.json(
-        { error: `La categoría con ID ${id} debe ser un número válido.` },
-        { status: 400 },
-      )
+      return createJsonErrorResponse({
+        message: `La categoría con ID ${id} debe ser un número válido.`,
+        status: 400,
+      });
     }
 
     // Verificar si la categoría ya existe
     const existingCategory = await prisma.categories.findUnique({ where: { id: numericId } })
 
     if (!existingCategory) {
-      return NextResponse.json(
-        { error: `La categoría con ID ${ numericId } no existe.` },
-        { status: 400 },
-      );
+      return createJsonErrorResponse({
+        message: `La categoría con ID ${ numericId } no existe.`,
+        status: 400,
+      });
     }
 
     // Validar los datos de entrada
@@ -159,23 +158,20 @@ export async function PATCH(
       data: dataToUpdate,
     })
 
-    return NextResponse.json({
-      message: `La categoría con ID ${ numericId } actualizada correctamente.`,
-      data: categoryUpdate
-    })
+    return applyCorsHeaders(
+      NextResponse.json({
+        message: `La categoría con ID ${numericId} actualizada correctamente.`,
+        data: categoryUpdate,
+      })
+    );
   } catch (error) {
-    console.log(error)
-
     if (error instanceof ValidationError) {
-      return NextResponse.json(
-        { errors: error.errors },
-        { status: 400 }
-      )
+      return createJsonErrorResponse({
+        message: error.errors.join(', '),
+        status: 400,
+      });
     }
 
-    return NextResponse.json(
-      { error: 'Error interno del servidor al actualizar la categoría.' },
-      { status: 500 },
-    );
+    return createJsonErrorResponse({});
   }
 }
